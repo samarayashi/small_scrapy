@@ -14,14 +14,13 @@ class CnaSpider(BaseNewsSpider):
     
     name = "cna"
     api_url = "https://www.cna.com.tw/cna2018api/api/WNewsList"
-    DEFAULT_CATEGORY = 'aall'  # 預設使用即時新聞類別
     DEFAULT_PAGE_SIZE = 40     # 預設每頁新聞數量
 
-    def __init__(self, category=DEFAULT_CATEGORY):
+    def __init__(self, category="acul"):
         """
         初始化爬蟲
         Args:
-            category (str): 新聞類別代碼，預設為'aall'（即時新聞）
+            category (str): 新聞類別代碼
         """
         super().__init__()
         # 設置logger，控制台只顯示INFO及以上級別
