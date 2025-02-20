@@ -155,11 +155,15 @@ class CnaSpider(BaseNewsSpider):
                 'content': content,
                 'url': article_data['url'],
                 'publish_date': article_data['publish_time'],
-                'source': article_data['source'],
-                'category': article_data['category']
+                'source': '中央社',  # 添加固定的來源
+                'category': self.get_category_name()  # 使用當前類別
             }
         except Exception as e:
-            self.logger.error(f"解析文章內容失敗 {article_data['url']}: {str(e)}")
+            # 使用 exc_info=True 來記錄完整的堆疊跟蹤
+            self.logger.error(
+                f"解析文章內容失敗 {article_data['url']}: {str(e)}", 
+                exc_info=True
+            )
             return None
 
     def _clean_content(self, content_element) -> Optional[str]:

@@ -16,6 +16,16 @@ def test_news_scraper():
     print(f"成功爬取 {len(articles)} 篇文章")
     for article in articles:
         print(f"標題: {article['title']}")
+    
+    # 測試單一篇文章
+    article = articles[0]
+    print(f"測試單一篇文章: {article['title']}")
+    print(f"發布時間: {article['publish_time']}")
+    print(f"連結: {article['url']}")
+    
+    # 測試單一篇文章的內容
+    content = spider.fetch_article(article)
+    print(f"文章內容: {content}")
 
 if __name__ == "__main__":
     import sys

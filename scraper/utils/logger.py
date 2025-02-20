@@ -1,5 +1,6 @@
 import logging
 import sys
+import traceback
 from pathlib import Path
 from datetime import datetime
 from rich.logging import RichHandler
@@ -15,9 +16,16 @@ class CustomFormatter(logging.Formatter):
     
     def __init__(self):
         super().__init__(
-            fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s\n%(exc_info)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
+    
+    def format(self, record):
+        """重寫format方法以自定義異常輸出格式"""
+        if record.exc_info:
+            # 如果有異常信息，格式化它
+            record.exc_text = ''.join(traceback.format_exception(*record.exc_info))
+        return super().format(record)
 
 def setup_logger(
     name: str,
@@ -59,18 +67,19 @@ def setup_logger(
     console = Console(force_terminal=True)
     console_handler = RichHandler(
         console=console,
-        show_time=False,  # 因為我們的CustomFormatter已經包含時間
-        show_path=False,  # 簡化輸出
+        show_time=False,
+        show_path=True,
         rich_tracebacks=True,
         tracebacks_show_locals=True,
-        tracebacks_width=None,  # 自動適應終端寬度
-        markup=True  # 啟用rich標記
+        tracebacks_width=None,
+        markup=True,
+        enable_link_path=True  # 啟用文件路徑連結
     )
     console_handler.setLevel(console_level)
     
     # 為控制台處理器設置特殊的格式
     console_formatter = logging.Formatter(
-        fmt="%(message)s",  # Rich會自動添加時間和級別的格式
+        fmt="%(message)s\n%(exc_info)s",  # 添加異常信息
         datefmt="[%X]"
     )
     console_handler.setFormatter(console_formatter)
