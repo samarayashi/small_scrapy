@@ -11,22 +11,9 @@ def update_menu_config():
 
 def test_news_scraper():
     """測試新聞爬蟲"""
-    spider = CnaSpider(category='ait')
-    articles = list(spider.fetch_news_list())
-    print(f"成功爬取 {len(articles)} 篇文章")
-    for article in articles:
-        print(f"標題: {article['title']}")
-    
-    # 測試單一篇文章
-    article = articles[0]
-    print(f"測試單一篇文章: {article['title']}")
-    print(f"發布時間: {article['publish_time']}")
-    print(f"連結: {article['url']}")
-    
-    # 測試單一篇文章的內容
-    content = spider.fetch_article(article)
-    print(f"文章內容: {content}")
-
+    spider = CnaSpider(category='asoc')
+    for article in spider.crawl():
+        print(article)
 if __name__ == "__main__":
     import sys
     

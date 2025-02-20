@@ -71,8 +71,7 @@ class CnaMenuScraper(BaseNewsSpider):
             for link in menu.select('a.first-level'):
                 category_code = link['href'].split('/')[-1].replace('.aspx', '')
                 category_name = link.text.strip()
-                menu_mapping[category_name] = category_code
-                
+                menu_mapping[category_code] = category_name
                 
             self.logger.info(f"成功爬取{len(menu_mapping)}個類別映射")
             return menu_mapping

@@ -1,6 +1,6 @@
 from scraper.spiders.base_spider import BaseNewsSpider
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import requests
 import logging
@@ -13,8 +13,9 @@ class CnaSpider(BaseNewsSpider):
     """中央社新聞爬蟲"""
     
     name = "cna"
-    base_url = "https://www.cna.com.tw"
+    api_url = "https://www.cna.com.tw/cna2018api/api/WNewsList"
     DEFAULT_CATEGORY = 'aall'  # 預設使用即時新聞類別
+    DEFAULT_PAGE_SIZE = 40     # 預設每頁新聞數量
 
     def __init__(self, category=DEFAULT_CATEGORY):
         """
@@ -30,12 +31,21 @@ class CnaSpider(BaseNewsSpider):
             file_level=logging.DEBUG
         )
         
+        # 設置API專用的headers
+        self.session.headers.update({
+            'Referer': 'https://www.cna.com.tw/',
+            'Origin': 'https://www.cna.com.tw',
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json'
+        })
+        
         # 載入類別配置
         menu_scraper = CnaMenuScraper()
-        self.categories = menu_scraper.get_menu_mapping()
+        self.categories_map = menu_scraper.get_menu_mapping()
         
         # 設定初始類別
         self.set_category(category)
+        self.cutoff_time = datetime.now() - timedelta(hours=24)
 
     def set_category(self, category_code: str) -> None:
         """
@@ -44,10 +54,10 @@ class CnaSpider(BaseNewsSpider):
             category_code (str): 類別代碼
         """
         # 檢查類別代碼是否在可用類別值中
-        if category_code not in self.categories.values():
+        if category_code not in self.categories_map.keys():
             available_categories = "\n".join([
-                f"- {name}: {code}" 
-                for name, code in self.categories.items()
+                f"- {code}: {name}" 
+                for code, name in self.categories_map.items()
             ])
             raise ValueError(
                 f"無效的類別代碼: {category_code}\n"
@@ -55,95 +65,118 @@ class CnaSpider(BaseNewsSpider):
             )
         
         self.category = category_code
-        self.start_url = f"{self.base_url}/list/{category_code}.aspx"
 
-    def get_category_name(self) -> str:
-        """獲取當前類別的中文名稱"""
-        for name, code in self.categories.items():
-            if code == self.category:
-                return name
-        return "未知類別"
-
-    def fetch_news_list(self) -> Generator[Dict, None, None]:
-        """獲取新聞列表"""
+    def get_news_list(self, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> list:
+        """
+        從API獲取新聞列表
+        Args:
+            page (int): 頁碼
+            page_size (int): 每頁新聞數量，預設40篇
+        Returns:
+            list: 新聞列表
+        """
         try:
-            response = self._request_with_retry(self.start_url)
-            if response:
-                # 傳遞 response.text 而不是 response 物件
-                yield from self.parse_list(response.text)
-        except Exception as e:
-            self.logger.error(f"獲取新聞列表失敗: {str(e)}")
-
-    def parse_list(self, html_content: str) -> Generator[Dict, None, None]:
-        """解析新聞列表頁面"""
-        try:
-            soup = BeautifulSoup(html_content, 'html.parser')
-            items = soup.select('#jsMainList > li')
+            payload = {
+                "action": "0",
+                "category": self.category,
+                "pagesize": str(page_size),
+                "pageidx": page
+            }
             
-            for item in items:
+            # 使用父類的session發送請求
+            response = self.session.post(self.api_url, json=payload)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data["Result"] != "Y":
+                self.logger.error(f"API返回錯誤: {data}")
+                return []
+            
+            # 篩選24小時內的新聞
+            news_items = []
+            for item in data["ResultData"]["Items"]:
+                news_time = datetime.strptime(
+                    item['CreateTime'], 
+                    '%Y/%m/%d %H:%M'
+                )
+                if news_time >= self.cutoff_time:
+                    news_items.append(item)
+                    
+            return news_items
+            
+        except Exception as e:
+            self.logger.error(f"獲取新聞列表失敗: {str(e)}", exc_info=True)
+            return []
+
+    def crawl(self) -> Generator[Dict, None, None]:
+        """
+        爬取新聞
+        Args:
+            max_pages (int): 最大爬取頁數，預設2頁以確保獲取足夠的24小時內新聞
+        Yields:
+            Dict: 新聞資料
+        """
+        total_fetched = 0
+        page = 1    
+        need_fetching = True
+        page_size = self.DEFAULT_PAGE_SIZE
+        
+        while need_fetching:
+            news_list = self.get_news_list(page=page, page_size=page_size)
+            # 如果當前頁面的新聞數量小於預設值,表示已經沒有更多新聞,不需要繼續爬取下一頁
+            if len(news_list) < self.DEFAULT_PAGE_SIZE:
+                self.logger.info(f"下輪新聞內容數量({len(news_list)})小於預設值({self.DEFAULT_PAGE_SIZE}),將會停止爬取")
+                need_fetching = False
+            else:
+                page += 1
+                
+            for news in news_list:
                 try:
-                    # 獲取連結
-                    link = item.select_one('a')
-                    if not link:
-                        continue
-                        
-                    url = link.get('href', '')
-                    if not url:
-                        continue
-                        
-                    # 確保是完整URL
-                    if not url.startswith('http'):
-                        url = self.base_url + url
-                    
-                    # 獲取標題
-                    title_element = item.select_one('h2 span')
-                    if not title_element:
-                        continue
-                    title = title_element.get_text(strip=True)
-                    
-                    # 獲取日期 - 修正這裡
-                    date_element = item.select_one('.date')
-                    if not date_element:
-                        continue
-                        
-                    # 直接獲取日期文字
-                    date_text = date_element.get_text(strip=True)
-                    # 轉換日期格式
-                    publish_time = datetime.strptime(date_text, '%Y/%m/%d %H:%M')
-                    
-                    yield {
-                        'url': url,
-                        'title': title,
-                        'publish_time': publish_time
+                    # 從API回應中提取資料
+                    article_data = {
+                        'title': news['HeadLine'],
+                        'url': news['PageUrl'],
+                        'publish_time': datetime.strptime(
+                            news['CreateTime'], 
+                            '%Y/%m/%d %H:%M'
+                        ),
+                        'source': '中央社',
+                        'category': self.categories_map[self.category]
                     }
                     
+                    # 獲取並解析文章內容
+                    article_content = self.get_article_content(article_data['url'])
+                    if article_content:
+                        article_data.update(article_content)
+                        total_fetched += 1
+                        yield article_data
+                        
                 except Exception as e:
-                    self.logger.error(f"解析列表項目失敗: {str(e)}\n項目內容: {item}")
+                    self.logger.error(
+                        f"處理新聞失敗 {news.get('PageUrl', '')}: {str(e)}", 
+                        exc_info=True
+                    )
                     continue
-                
-        except Exception as e:
-            self.logger.error(f"解析列表頁面失敗: {str(e)}")
+            
+            self.logger.info(f"已爬取 {total_fetched} 篇24小時內的新聞")
 
-    def fetch_article(self, article_data: Dict) -> Optional[Dict]:
-        """獲取文章內容"""
+    def get_article_content(self, url: str) -> Optional[Dict]:
+        """
+        獲取文章內容
+        Args:
+            url (str): 文章URL
+        Returns:
+            Optional[Dict]: 文章內容
+        """
         try:
-            response = self._request_with_retry(article_data['url'])
-            if response:
-                # 傳遞 response.text
-                return self.parse_article(response.text, article_data)
-        except Exception as e:
-            self.logger.error(f"獲取文章失敗 {article_data['url']}: {str(e)}")
-        return None
-
-    def parse_article(self, html_content: str, article_data: Dict) -> Optional[Dict]:
-        """解析文章內容"""
-        try:
-            # 使用 html_content 而不是 response.text
-            soup = BeautifulSoup(html_content, 'lxml')
+            # 使用父類的_request_with_retry方法
+            response = self._request_with_retry(url)
+            
+            soup = BeautifulSoup(response.text, 'lxml')
             content_element = soup.select_one('div.paragraph')
             
             if not content_element:
-                self.logger.warning(f"找不到文章內容: {article_data['url']}")
+                self.logger.warning(f"找不到文章內容: {url}")
                 return None
                 
             content = self._clean_content(content_element)
@@ -151,19 +184,11 @@ class CnaSpider(BaseNewsSpider):
                 return None
                 
             return {
-                'title': article_data['title'],
-                'content': content,
-                'url': article_data['url'],
-                'publish_date': article_data['publish_time'],
-                'source': '中央社',  # 添加固定的來源
-                'category': self.get_category_name()  # 使用當前類別
+                'content': content
             }
+            
         except Exception as e:
-            # 使用 exc_info=True 來記錄完整的堆疊跟蹤
-            self.logger.error(
-                f"解析文章內容失敗 {article_data['url']}: {str(e)}", 
-                exc_info=True
-            )
+            self.logger.error(f"獲取文章內容失敗 {url}: {str(e)}", exc_info=True)
             return None
 
     def _clean_content(self, content_element) -> Optional[str]:
