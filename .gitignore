@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+configs/
+*.json
+*.log
+*.db
+*.sqlite3
+
+# Scrapy specific
+.scrapy
+
+# Test
+.coverage
+htmlcov/
+.tox/
+.pytest_cache/
+
+# Distribution
+*.manifest
+*.spec
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mypy
+.mypy_cache/
+
+# Temporary files
+*.bak
+*.tmp
+*~
+
+# 忽略所有 configs 目錄
+configs/
+
+# 但是追蹤這個特定文件
+!configs/default_config.json 
