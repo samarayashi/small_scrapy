@@ -4,108 +4,169 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import requests
 import logging
+import os
 from typing import Dict, Optional, Generator
 from .cna_menu_scraper import CnaMenuScraper
+from scraper.utils.logger import setup_logger
 
 class CnaSpider(BaseNewsSpider):
-    # 靜態配置
+    """中央社新聞爬蟲"""
+    
     name = "cna"
     base_url = "https://www.cna.com.tw"
+    DEFAULT_CATEGORY = 'aall'  # 預設使用即時新聞類別
 
-    def __init__(self, category='ait', **kwargs):
+    def __init__(self, category=DEFAULT_CATEGORY):
+        """
+        初始化爬蟲
+        Args:
+            category (str): 新聞類別代碼，預設為'aall'（即時新聞）
+        """
         super().__init__()
+        # 設置logger，控制台只顯示INFO及以上級別
+        self.logger = setup_logger(
+            self.__class__.__name__,
+            console_level=logging.INFO,
+            file_level=logging.DEBUG
+        )
         
-        # 從配置文件讀取可用類別
+        # 載入類別配置
         menu_scraper = CnaMenuScraper()
-        self.available_categories = menu_scraper.get_menu_mapping()
+        self.categories = menu_scraper.get_menu_mapping()
         
-        if not self.available_categories:
-            self.logger.error("無法獲取類別配置，使用預設類別")
-            self.available_categories = {'ait': '科技', 'aall': '即時'}
-        
-        # 驗證分類是否有效
-        if category not in self.available_categories:
-            raise ValueError(f"Invalid category. Must be one of {list(self.available_categories.keys())}")
-        
-        # 動態配置
-        self.category = category
-        self.start_url = f"{self.base_url}/list/{category}.aspx"
-        self.logger = logging.getLogger(self.__class__.__name__)
+        # 設定初始類別
+        self.set_category(category)
 
-    def change_category(self, new_category: str) -> None:
-        """允許動態更改分類"""
-        if new_category not in self.available_categories:
-            raise ValueError(f"Invalid category. Must be one of {list(self.available_categories.keys())}")
-        self.category = new_category
-        self.start_url = f"{self.base_url}/list/{new_category}.aspx"
+    def set_category(self, category_code: str) -> None:
+        """
+        設定爬取的新聞類別
+        Args:
+            category_code (str): 類別代碼
+        """
+        # 檢查類別代碼是否在可用類別值中
+        if category_code not in self.categories.values():
+            available_categories = "\n".join([
+                f"- {name}: {code}" 
+                for name, code in self.categories.items()
+            ])
+            raise ValueError(
+                f"無效的類別代碼: {category_code}\n"
+                f"可用類別:\n{available_categories}"
+            )
+        
+        self.category = category_code
+        self.start_url = f"{self.base_url}/list/{category_code}.aspx"
+
+    def get_category_name(self) -> str:
+        """獲取當前類別的中文名稱"""
+        for name, code in self.categories.items():
+            if code == self.category:
+                return name
+        return "未知類別"
 
     def fetch_news_list(self) -> Generator[Dict, None, None]:
         """獲取新聞列表"""
         try:
-            response = self.session.get(self.start_url, headers=self.headers)
-            response.raise_for_status()
-            return self.parse_list(response)
-        except requests.RequestException as e:
+            response = self._request_with_retry(self.start_url)
+            if response:
+                # 傳遞 response.text 而不是 response 物件
+                yield from self.parse_list(response.text)
+        except Exception as e:
             self.logger.error(f"獲取新聞列表失敗: {str(e)}")
-            return None
 
-    def parse_list(self, response) -> Generator[Dict, None, None]:
+    def parse_list(self, html_content: str) -> Generator[Dict, None, None]:
         """解析新聞列表頁面"""
-        soup = BeautifulSoup(response.text, 'lxml')
-        for li in soup.select('ul.mainList li:not(.sponsored)'):
-            try:
-                article_data = {
-                    'title': li.select_one('h2 span').text.strip(),
-                    'url': li.select_one('a')['href'],
-                    'publish_time': self._parse_cna_time(li.select_one('div.date')['title']),
-                    'source': '中央社'
-                }
-                article_content = self.fetch_article(article_data)
-                if article_content:
-                    yield article_content
-            except Exception as e:
-                self.logger.error(f"解析列表項目失敗: {str(e)}")
+        try:
+            soup = BeautifulSoup(html_content, 'html.parser')
+            items = soup.select('#jsMainList > li')
+            
+            for item in items:
+                try:
+                    # 獲取連結
+                    link = item.select_one('a')
+                    if not link:
+                        continue
+                        
+                    url = link.get('href', '')
+                    if not url:
+                        continue
+                        
+                    # 確保是完整URL
+                    if not url.startswith('http'):
+                        url = self.base_url + url
+                    
+                    # 獲取標題
+                    title_element = item.select_one('h2 span')
+                    if not title_element:
+                        continue
+                    title = title_element.get_text(strip=True)
+                    
+                    # 獲取日期 - 修正這裡
+                    date_element = item.select_one('.date')
+                    if not date_element:
+                        continue
+                        
+                    # 直接獲取日期文字
+                    date_text = date_element.get_text(strip=True)
+                    # 轉換日期格式
+                    publish_time = datetime.strptime(date_text, '%Y/%m/%d %H:%M')
+                    
+                    yield {
+                        'url': url,
+                        'title': title,
+                        'publish_time': publish_time
+                    }
+                    
+                except Exception as e:
+                    self.logger.error(f"解析列表項目失敗: {str(e)}\n項目內容: {item}")
+                    continue
+                
+        except Exception as e:
+            self.logger.error(f"解析列表頁面失敗: {str(e)}")
 
     def fetch_article(self, article_data: Dict) -> Optional[Dict]:
         """獲取文章內容"""
         try:
-            response = self.session.get(article_data['url'], headers=self.headers)
-            response.raise_for_status()
-            return self.parse_article(response, article_data)
-        except requests.RequestException as e:
+            response = self._request_with_retry(article_data['url'])
+            if response:
+                # 傳遞 response.text
+                return self.parse_article(response.text, article_data)
+        except Exception as e:
             self.logger.error(f"獲取文章失敗 {article_data['url']}: {str(e)}")
-            return None
+        return None
 
-    def parse_article(self, response, article_data: Dict) -> Dict:
+    def parse_article(self, html_content: str, article_data: Dict) -> Optional[Dict]:
         """解析文章內容"""
         try:
-            soup = BeautifulSoup(response.text, 'lxml')
+            # 使用 html_content 而不是 response.text
+            soup = BeautifulSoup(html_content, 'lxml')
             content_element = soup.select_one('div.paragraph')
-            content = self._clean_content(content_element)
             
+            if not content_element:
+                self.logger.warning(f"找不到文章內容: {article_data['url']}")
+                return None
+                
+            content = self._clean_content(content_element)
+            if not content:
+                return None
+                
             return {
                 'title': article_data['title'],
                 'content': content,
                 'url': article_data['url'],
                 'publish_date': article_data['publish_time'],
-                'source': article_data['source']
+                'source': article_data['source'],
+                'category': article_data['category']
             }
         except Exception as e:
             self.logger.error(f"解析文章內容失敗 {article_data['url']}: {str(e)}")
             return None
 
-    def _parse_cna_time(self, timestamp: str) -> datetime:
-        """解析中央社的時間戳"""
-        try:
-            return datetime.strptime(timestamp, '%Y%m%d%H%M%S')
-        except ValueError as e:
-            self.logger.error(f"解析時間戳失敗 {timestamp}: {str(e)}")
-            return datetime.now()
-
-    def _clean_content(self, content_element) -> str:
+    def _clean_content(self, content_element) -> Optional[str]:
         """清理文章內容"""
         if not content_element:
-            return ""
+            return None
+            
         try:
             # 移除不需要的元素
             for selector in ['.shareBar', '.modalbox', 'script']:
@@ -115,7 +176,8 @@ class CnaSpider(BaseNewsSpider):
             text = content_element.get_text(strip=True)
             # 移除多餘的空白
             text = re.sub(r'\s+', ' ', text)
-            return text
+            return text.strip() or None
+            
         except Exception as e:
             self.logger.error(f"清理內容失敗: {str(e)}")
-            return "" 
+            return None 
