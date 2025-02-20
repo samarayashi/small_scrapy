@@ -35,8 +35,6 @@ ENV/
 .DS_Store
 
 # Project specific
-configs/
-*.json
 *.log
 *.db
 *.sqlite3
@@ -71,9 +69,6 @@ htmlcov/
 *.bak
 *.tmp
 *~
-
-# 忽略所有 configs 目錄
-configs/
 
 # 但是追蹤這個特定文件
 !configs/default_config.json 
