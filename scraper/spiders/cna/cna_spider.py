@@ -172,16 +172,38 @@ class CnaSpider(BaseNewsSpider):
             return None
             
         try:
-            # 移除不需要的元素
-            for selector in ['.shareBar', '.modalbox', 'script']:
-                [x.extract() for x in content_element.select(selector)]
+            # 一次性選擇所有不需要的元素
+            unwanted_selectors = ', '.join([
+                '.shareBar', 
+                '.modalbox', 
+                'script',
+                '.SubscriptionInner',      # 移除訂閱區塊
+                '.articlekeywordGroup',    # 移除關鍵字區塊
+                '.paragraph.moreArticle',  # 移除相關文章區塊
+                '.paragraph.bottomArticleBanner',  # 移除底部廣告
+                '.paragraph.BtnShareGroup',  # 移除分享按鈕
+                '.advertiseGroup',         # 移除廣告區塊
+                '.advertiseMobile'         # 移除手機版廣告
+            ])
+            
+            # 一次性移除所有不需要的元素
+            for element in content_element.select(unwanted_selectors):
+                element.extract()
             
             # 獲取純文本並清理
             text = content_element.get_text(strip=True)
+            
             # 移除多餘的空白
             text = re.sub(r'\s+', ' ', text)
+            
+            # 移除版權聲明
+            text = re.sub(r'本網站之文字、圖片及影音，非經授權，不得轉載、公開播送或公開傳輸及利用。', '', text)
+            
+            # 移除編輯資訊
+            text = re.sub(r'（編輯：[^）]*）\d+', '', text)
+            
             return text.strip() or None
             
         except Exception as e:
-            self.logger.error(f"清理內容失敗: {str(e)}")
+            self.logger.error(f"清理內容失敗: {str(e)}", exc_info=True)
             return None 
