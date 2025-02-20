@@ -1,6 +1,18 @@
+# 資料庫相關
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
+
+# 爬蟲相關
 beautifulsoup4==4.12.2
 requests==2.31.0
+lxml==4.9.3
+rich>=10.0.0
+
+# 配置相關
 python-dotenv==1.0.0
-lxml==4.9.3 
+
+# 日誌相關
+colorlog==6.8.0  # 為日誌添加顏色支持
+
+# 類型提示相關
+typing-extensions==4.9.0  # 增強的類型提示支持 

@@ -13,8 +13,7 @@ class NewsArticle(Base):
     url = Column(String(1000), nullable=False)
     publish_time = Column(TIMESTAMP, nullable=False)
     source = Column(String(100), nullable=False)
-    category_code = Column(String(50), nullable=False)
-    category_name = Column(String(100), nullable=False)
+    category = Column(String(100), nullable=False)
     content = Column(Text)
     created_at = Column(TIMESTAMP, default=lambda: datetime.now(datetime.UTC))
     updated_at = Column(TIMESTAMP, default=lambda: datetime.now(datetime.UTC), onupdate=lambda: datetime.now(datetime.UTC))
@@ -25,7 +24,7 @@ class NewsArticle(Base):
     sentiment = Column(Float)
 
     def __repr__(self):
-        return f"<NewsArticle(title='{self.title}', category='{self.category_code}')>"
+        return f"<NewsArticle(title='{self.title}', category='{self.category}')>"
 
     @classmethod
     def from_spider_data(cls, data: dict) -> "NewsArticle":
