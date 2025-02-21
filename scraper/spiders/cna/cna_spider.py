@@ -42,13 +42,19 @@ class CnaSpider(BaseNewsSpider):
         menu_scraper = CnaMenuScraper()
         self.categories_map = menu_scraper.get_menu_mapping()
         
-        # 設定初始類別
-        self.set_category(category)
+        # 利用 property 的 setter 設定初始類別
+        self.category = category
         self.cutoff_time = datetime.now() - timedelta(hours=24)
 
-    def set_category(self, category_code: str) -> None:
+    @property
+    def category(self) -> str:
+        """取得類別"""
+        return self._category
+
+    @category.setter
+    def category(self, category_code: str) -> None:
         """
-        設定爬取的新聞類別
+        設定爬取的新聞類別，並檢查是否合法。
         Args:
             category_code (str): 類別代碼
         """
@@ -62,8 +68,7 @@ class CnaSpider(BaseNewsSpider):
                 f"無效的類別代碼: {category_code}\n"
                 f"可用類別:\n{available_categories}"
             )
-        
-        self.category = category_code
+        self._category = category_code
 
     def get_news_list(self, page: int = 1, page_size: int = DEFAULT_PAGE_SIZE) -> list:
         """

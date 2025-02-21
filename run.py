@@ -40,7 +40,10 @@ def run_etl():
         
         # 執行ETL流程
         pipeline = NewsETLPipeline()
-        pipeline.run()
+        categories = ['acul', 'aie', 'ait']
+        for category in categories:
+            pipeline.spider.category = category
+            pipeline.run()
         
     except Exception as e:
         logger.error(f"ETL執行失敗: {str(e)}")
