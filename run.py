@@ -7,6 +7,8 @@ from scraper.utils.logger import setup_logger
 # 設置日誌
 logger = setup_logger(__name__)
 
+
+
 def update_menu_config():
     """更新類別配置文件"""
     try:
