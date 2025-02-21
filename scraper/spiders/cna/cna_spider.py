@@ -14,7 +14,7 @@ class CnaSpider(BaseNewsSpider):
     
     name = "cna"
     api_url = "https://www.cna.com.tw/cna2018api/api/WNewsList"
-    DEFAULT_PAGE_SIZE = 40     # 預設每頁新聞數量
+    DEFAULT_PAGE_SIZE = 20     # 預設每頁新聞數量
 
     def __init__(self, category="acul"):
         """
@@ -107,7 +107,7 @@ class CnaSpider(BaseNewsSpider):
             self.logger.error(f"獲取新聞列表失敗: {str(e)}", exc_info=True)
             return []
 
-    def crawl(self) -> Generator[Dict, None, None]:
+    def crawl(self, max_pages: int = 2) -> Generator[Dict, None, None]:
         """
         爬取新聞
         Args:
@@ -120,11 +120,11 @@ class CnaSpider(BaseNewsSpider):
         need_fetching = True
         page_size = self.DEFAULT_PAGE_SIZE
         
-        while need_fetching:
+        while need_fetching and page <= max_pages:
             news_list = self.get_news_list(page=page, page_size=page_size)
             # 如果當前頁面的新聞數量小於預設值,表示已經沒有更多新聞,不需要繼續爬取下一頁
             if len(news_list) < self.DEFAULT_PAGE_SIZE:
-                self.logger.info(f"下輪新聞內容數量({len(news_list)})小於預設值({self.DEFAULT_PAGE_SIZE}),將會停止爬取")
+                self.logger.info(f"新聞內容數量({len(news_list)})小於預設值({self.DEFAULT_PAGE_SIZE}),將會停止爬取")
                 need_fetching = False
             else:
                 page += 1
