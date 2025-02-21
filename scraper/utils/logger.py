@@ -8,8 +8,8 @@ from rich.console import Console
 from rich.traceback import install
 from typing import Optional
 
-# 安裝 rich 的異常追蹤
-install(show_locals=True)
+# 安裝 rich 的異常追蹤，關閉本地變數顯示
+install(show_locals=False)
 
 class CustomFormatter(logging.Formatter):
     """自定義日誌格式"""
@@ -70,7 +70,7 @@ def setup_logger(
         show_time=False,
         show_path=True,
         rich_tracebacks=True,
-        tracebacks_show_locals=True,
+        tracebacks_show_locals=False,  # 關閉本地變數顯示
         tracebacks_width=None,
         markup=True,
         enable_link_path=True  # 啟用文件路徑連結
