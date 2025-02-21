@@ -27,6 +27,12 @@ class Settings:
     llm_api_endpoint: Optional[str] = os.getenv("LLM_API_ENDPOINT")
     llm_api_key: Optional[str] = os.getenv("LLM_API_KEY")
 
+    # 天氣 API 配置
+    owm_api_key: Optional[str] = os.getenv("OWM_API_KEY")
+
+    # LINE 配置
+    line_channel_token: Optional[str] = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+
     def validate(self) -> None:
         """驗證配置"""
         if not self.database_url:
