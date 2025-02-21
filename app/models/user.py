@@ -1,9 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-
-# 在生產環境中，建議統一使用一份 Base 定義
-Base = declarative_base()
+from app.models.base import Base  # 統一使用同一個 Base
+from app.models.news import NewsCategory  # 添加 NewsCategory 的導入
 
 class User(Base):
     """使用者模型，存放使用者基本資料"""
@@ -48,8 +46,7 @@ class SubNews(Base):
     __table_args__ = (UniqueConstraint('user_id', 'news_category_key', name='uq_user_news_category'),)
 
     user = relationship('User', back_populates='sub_news')
-    # 使用字串引用避免循環引用，NewsCategory 定義於 app/models/news.py
-    news_category = relationship('NewsCategory', lazy='joined')
+    news_category = relationship(NewsCategory, lazy='joined')  # 直接使用已導入的 NewsCategory 類別
 
     def __repr__(self):
         return f"<SubNews(user_id={self.user_id}, news_category_key={self.news_category_key})>" 

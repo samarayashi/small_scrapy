@@ -1,9 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, ARRAY, Float, UniqueConstraint, ForeignKey
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
-
-Base = declarative_base()
+from app.models.base import Base  # 從統一的 Base 匯入
 
 class NewsCategory(Base):
     """新聞分類模型，主鍵為 category_key"""
