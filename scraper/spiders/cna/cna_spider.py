@@ -140,7 +140,7 @@ class CnaSpider(BaseNewsSpider):
                             '%Y/%m/%d %H:%M'
                         ),
                         'source': '中央社',
-                        'category': self.categories_map[self.category]
+                        'category': self.category
                     }
                     
                     # 獲取並解析文章內容
