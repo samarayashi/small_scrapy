@@ -126,6 +126,21 @@ class NotificationBroker:
         
         return "\n".join(lines)
     
+    def handle_user_registration(self, user_id: str) -> User:
+        """處理新用戶註冊並返回用戶物件"""
+        try:
+            user = self.session.query(User).filter_by(line_user_id=user_id).first()
+            if not user:
+                user = User(line_user_id=user_id)
+                self.session.add(user)
+                self.session.commit()
+                logger.info(f"新用戶註冊成功: {user_id}")
+            return user
+        except Exception as e:
+            self.session.rollback()
+            logger.error(f"用戶註冊失敗: {str(e)}")
+            raise
+    
     def send_weather_notifications(self) -> None:
         """發送天氣通知給所有訂閱者"""
         logger.info("開始發送天氣通知...")
@@ -134,6 +149,7 @@ class NotificationBroker:
         weather_subs = (
             self.session.query(SubWeather)
             .join(User)
+            .filter(User.is_registered == True)
             .all()
         )
         
@@ -179,7 +195,7 @@ class NotificationBroker:
         news_subs = (
             self.session.query(SubNews)
             .join(User)
-            .join(NewsCategory)
+            .filter(User.is_registered == True)
             .all()
         )
         

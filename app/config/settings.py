@@ -22,17 +22,13 @@ class Settings:
     # SQLAlchemy配置
     sql_echo: bool = os.getenv("SQL_ECHO", "false").lower() == "true"
     
-    # LLM配置
-    api_key: Optional[str] = os.getenv("API_KEY")
-    llm_api_endpoint: Optional[str] = os.getenv("LLM_API_ENDPOINT")
-    llm_api_key: Optional[str] = os.getenv("LLM_API_KEY")
 
     # 天氣 API 配置
     owm_api_key: Optional[str] = os.getenv("OWM_API_KEY")
 
     # LINE 配置
     line_channel_token: Optional[str] = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-
+    line_channel_secret: Optional[str] = os.getenv("LINE_CHANNEL_SECRET")
     def validate(self) -> None:
         """驗證配置"""
         if not self.database_url:
