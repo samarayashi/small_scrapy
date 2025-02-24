@@ -27,7 +27,10 @@ CREATE TABLE IF NOT EXISTS news_articles (
 CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     user_name VARCHAR(100) NOT NULL,
-    line_user_id VARCHAR(100) NOT NULL
+    line_user_id VARCHAR(100) NOT NULL UNIQUE,
+    is_registered BOOLEAN DEFAULT FALSE,
+    registration_date TIMESTAMP,
+    last_active TIMESTAMP
 );
 
 -- 創建天氣訂閱表
@@ -88,8 +91,8 @@ INSERT INTO news_categories (category_key, category_name) VALUES
 -- 使用單一 CTE 串聯所有插入操作
 WITH inserted_user AS (
     -- 插入使用者資料並返回 ID
-    INSERT INTO users (user_name, line_user_id)
-    VALUES ('FarEastern hospital', 'U85bfd24c5c8d48b0c9e3ed09d9791f97')
+    INSERT INTO users (user_name, line_user_id, is_registered, registration_date, last_active)
+    VALUES ('FarEastern hospital', 'U85bfd24c5c8d48b0c9e3ed09d9791f97', TRUE, NOW(), NOW())
     RETURNING id
 ), inserted_weather AS (
     -- 插入天氣訂閱資料
