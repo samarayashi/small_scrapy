@@ -32,7 +32,7 @@ class Settings:
     def validate(self) -> None:
         """驗證配置"""
         if not self.database_url:
-            raise ValueError("DATABASE_URL 未設置")
+            logger.warning("DATABASE_URL 未設置，某些功能可能無法正常運作")
 
 # 創建配置實例並轉換為字典
 settings = Settings()
@@ -43,6 +43,3 @@ try:
 except ValueError as e:
     logger.error(f"配置驗證失敗: {str(e)}")
     raise
-
-# 導出配置字典
-config = asdict(settings) 

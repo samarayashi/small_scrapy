@@ -1,11 +1,11 @@
 from sqlalchemy import create_engine, inspect, text
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker, Session, scoped_session
 from sqlalchemy.exc import SQLAlchemyError
 from contextlib import contextmanager
 import logging
 from typing import Generator
 
-from app.config.settings import config
+from app.config.settings import settings
 from app.models.news import Base
 from scraper.utils.logger import setup_logger
 
@@ -15,20 +15,26 @@ logger = setup_logger(__name__)
 class DatabaseManager:
     """資料庫連接管理器"""
     
-    def __init__(self):
+    def __init__(self, database_url=None):
+        self.engine = None
+        self.session_factory = None
+        
+        # 直接使用 settings 中的 database_url 初始化
+        database_url = database_url or settings.database_url
+        if database_url:
+            self.init_with_url(database_url)
+        else:
+            logger.warning("未提供資料庫URL，需要稍後手動初始化")
+    
+    def init_with_url(self, database_url):
+        """使用URL初始化"""
         try:
-            if not config.get('database_url'):
-                raise ValueError("database_url not found in config")
-                
-            self.engine = create_engine(
-                config['database_url'],
-                echo=config.get('sql_echo', False)
-            )
-            self.SessionLocal = sessionmaker(
-                autocommit=False,
-                autoflush=False,
-                bind=self.engine
-            )
+            if not database_url:
+                raise ValueError("database_url not found")
+            
+            echo = settings.sql_echo or False
+            self.engine = create_engine(database_url, echo=echo)
+            self.session_factory = scoped_session(sessionmaker(bind=self.engine))
             
             # 首先測試數據庫連接
             if not self.test_connection():
@@ -42,6 +48,19 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"資料庫連接初始化失敗: {str(e)}")
             raise
+            
+    def init_app(self, app):
+        """Flask應用初始化"""
+        database_url = app.config.get('DATABASE_URL') or settings.database_url
+        if not database_url:
+            raise ValueError("DATABASE_URL 未設置")
+        self.init_with_url(database_url)
+        
+        # 註冊關閉鉤子
+        @app.teardown_appcontext
+        def close_sessions(exception=None):
+            if self.session_factory:
+                self.session_factory.remove()
 
     def test_connection(self) -> bool:
         """測試數據庫連接並驗證配置"""
@@ -108,7 +127,7 @@ class DatabaseManager:
     @contextmanager
     def get_session(self) -> Generator[Session, None, None]:
         """獲取資料庫會話的上下文管理器"""
-        session = self.SessionLocal()
+        session = self.session_factory()
         try:
             yield session
             session.commit()
