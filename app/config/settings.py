@@ -36,6 +36,9 @@ class Settings:
     
     # 應用服務
     app_port: int = int(os.getenv("PORT", os.getenv("APP_PORT", "5001")))
+    
+    # 排程器
+    scheduler_debug: bool = os.getenv("SCHEDULER_DEBUG", "false").lower() == "true"
 
 # 創建配置實例並轉換為字典
 settings = Settings()

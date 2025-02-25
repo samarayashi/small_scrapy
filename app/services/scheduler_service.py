@@ -1,8 +1,10 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy.orm import scoped_session
 from app.database.connection import db_manager
 from scraper.spiders.cna.cna_spider import CnaSpider
+from line_broker.broker import NotificationBroker
+from app.config.settings import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -46,16 +48,41 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"排程任務執行失敗: {str(e)}")
         finally:
-            session.remove()
-
+            session.remove()   
+        
     def start(self):
         """啟動排程器"""
-        trigger = IntervalTrigger(hours=24)  # 每24小時執行一次
+        # 每天早上八點執行新聞爬蟲
         self.scheduler.add_job(
             self._crawl_job,
-            trigger=trigger,
+            trigger=CronTrigger(hour=8, minute=0),
             max_instances=1
         )
+        
+        # 初始化通知代理
+        broker = NotificationBroker(
+            db_session=self._get_db_session(),
+            line_token=settings.line_channel_token,
+            owm_api_key=settings.owm_api_key
+        )
+        
+        # 每天早上八點執行天氣通知
+        self.scheduler.add_job(
+            broker.send_weather_notifications,
+            trigger=CronTrigger(hour=8, minute=0),
+            max_instances=1
+        )
+        
+        # 添加一個測試任務，用於開發階段測試（每分鐘執行一次）
+        if self.app and settings.scheduler_debug:
+            self.scheduler.add_job(
+                self._notify_weather,
+                trigger=CronTrigger(minute='*/1'),  # 每分鐘執行一次，用於測試
+                max_instances=1,
+                id='weather_test_job'
+            )
+            logger.info("已添加天氣通知測試任務（每分鐘執行）")
+        
         self.scheduler.start()
         logger.info("排程服務已啟動")
 
