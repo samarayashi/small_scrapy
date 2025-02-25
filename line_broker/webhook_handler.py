@@ -26,7 +26,7 @@ def callback():
         abort(400)
     return 'OK'
 
-@webhook_blueprint.route("/test", methods=["GET"])
+@webhook_blueprint.route("/health", methods=["GET"])
 def test_route():
     """測試路由，確認服務是否正常運行"""
     return "Webhook testing is working!", 200
