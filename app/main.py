@@ -37,8 +37,8 @@ def _init_components(app):
     scheduler = SchedulerService(app)
     scheduler.start()
     
-    # 3. 註冊藍圖
-    app.register_blueprint(webhook_blueprint)
+    # 3. 註冊藍圖，加上 /line 作為前綴
+    app.register_blueprint(webhook_blueprint, url_prefix='/line')
     
     # 4. 添加關閉鉤子
     @app.teardown_appcontext
