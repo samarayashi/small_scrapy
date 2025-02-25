@@ -7,6 +7,7 @@ from line_broker.broker import NotificationBroker
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.config.settings import settings  # 需確保設定檔路徑正確
+from app.main import create_app
 
 # 設置日誌
 logger = setup_logger(__name__)
@@ -38,6 +39,12 @@ def test_news_scraper():
 def run_etl():
     """執行ETL流程"""
     try:
+        # 確保資料庫已初始化
+        if not db_manager.engine:
+            if not settings.database_url:
+                raise ValueError("未設置資料庫連接字串 (DATABASE_URL)")
+            db_manager.init_with_url(settings.database_url)
+            
         # 確保資料表存在
         db_manager.create_tables()
         logger.info("資料表檢查完成")
@@ -142,16 +149,8 @@ if __name__ == "__main__":
                 news_only=args.news_only
             )
         elif args.command == 'webhook':
-            from line_broker.webhook_handler import WebhookServer
-            engine = create_engine(settings.database_url)
-            Session = sessionmaker(bind=engine)
-            
-            server = WebhookServer(
-                channel_secret=settings.line_channel_secret,
-                channel_token=settings.line_channel_token,
-                db_session=Session()  # 傳入資料庫會話
-            )
-            server.run(host=args.host, port=args.port)
+            app = create_app()
+            app.run(host=args.host, port=args.port)
         else:
             logger.error(f"未知的命令: {args.command}")
             sys.exit(1)
