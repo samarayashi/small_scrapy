@@ -33,7 +33,16 @@ class DatabaseManager:
                 raise ValueError("database_url not found")
             
             echo = settings.sql_echo or False
-            self.engine = create_engine(database_url, echo=echo)
+            # 設置連接池參數
+            
+            self.engine = create_engine(
+                database_url, 
+                echo=echo,
+                pool_size=3,  # 連接池大小
+                max_overflow=10,  # 允許的最大臨時連接
+                pool_timeout=30,  # 連接獲取超時
+                pool_recycle=1800  # 連接回收時間(秒)
+            )
             self.session_factory = scoped_session(sessionmaker(bind=self.engine))
             
             # 首先測試數據庫連接

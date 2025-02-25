@@ -4,6 +4,9 @@ from app.services.scheduler_service import SchedulerService
 from line_broker.webhook_handler import webhook_blueprint
 from app.config.settings import settings
 import logging
+import signal
+import sys
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,9 @@ def create_app():
     
     # 初始化組件
     _init_components(app)
+    
+    # 註冊 SIGTERM 處理器
+    register_shutdown_handlers()
     
     return app
 
@@ -46,6 +52,49 @@ def _init_components(app):
         scheduler.shutdown()
         logger.info("排程服務已關閉")
 
+def register_shutdown_handlers():
+    """註冊各種關閉信號的處理器"""
+    
+    def shutdown_scheduler():
+        """關閉排程器"""
+        try:
+            from app.services.scheduler_service import scheduler
+            if scheduler and scheduler.running:
+                logger.info("關閉排程器...")
+                scheduler.shutdown()
+                return True
+        except Exception as e:
+            logger.error(f"關閉排程器時發生錯誤: {str(e)}")
+        return False
+    
+    def shutdown_db():
+        """關閉資料庫連接"""
+        try:
+            from app.database.connection import db_manager
+            if db_manager and db_manager.session_factory:
+                logger.info("關閉資料庫連接...")
+                db_manager.session_factory.remove()
+                return True
+        except Exception as e:
+            logger.error(f"關閉資料庫連接時發生錯誤: {str(e)}")
+        return False
+    
+    def sigterm_handler(signum, frame):
+        """處理 SIGTERM 信號"""
+        logger.info("收到 SIGTERM 信號，開始優雅關閉...")
+        
+        # 按優先順序關閉各項資源
+        shutdown_scheduler()
+        shutdown_db()
+        
+        logger.info("應用程式已完成優雅關閉")
+        sys.exit(0)
+    
+    # 註冊信號處理器
+    signal.signal(signal.SIGTERM, sigterm_handler)
+    signal.signal(signal.SIGINT, sigterm_handler)
+
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", settings.app_port))
     app = create_app()
-    app.run(host='0.0.0.0', port=5001) 
+    app.run(host='0.0.0.0', port=port) 

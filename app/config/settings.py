@@ -32,7 +32,10 @@ class Settings:
     def validate(self) -> None:
         """驗證配置"""
         if not self.database_url:
-            logger.warning("DATABASE_URL 未設置，某些功能可能無法正常運作")
+            raise ValueError("DATABASE_URL 未設置")
+    
+    # 應用服務
+    app_port: int = int(os.getenv("PORT", os.getenv("APP_PORT", "5001")))
 
 # 創建配置實例並轉換為字典
 settings = Settings()
