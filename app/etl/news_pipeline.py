@@ -1,5 +1,5 @@
 from typing import Generator, Dict, List
-import logging
+from scraper.utils.logger import setup_logger
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,7 +8,8 @@ from app.database.connection import db_manager
 from app.models.news import NewsArticle
 from scraper.spiders.cna.cna_spider import CnaSpider
 
-logger = logging.getLogger(__name__)
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
 class NewsETLPipeline:
     """新聞ETL管道"""

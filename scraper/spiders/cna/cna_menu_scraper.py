@@ -3,7 +3,10 @@ import json
 import os
 from typing import Dict
 from bs4 import BeautifulSoup
-import logging
+from scraper.utils.logger import setup_logger
+
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
 class CnaMenuScraper(BaseNewsSpider):
     """爬取中央社主選單類別的爬蟲"""

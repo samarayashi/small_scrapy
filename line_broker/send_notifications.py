@@ -6,7 +6,7 @@
 """
 
 import argparse
-import logging
+from scraper.utils.logger import setup_logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -14,11 +14,7 @@ from app.config.settings import settings
 from .broker import NotificationBroker
 
 # 設置日誌
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
 
 def parse_args():
     """解析命令列參數"""

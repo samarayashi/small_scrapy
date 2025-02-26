@@ -8,7 +8,7 @@ line_broker/broker.py
 4. 發送 LINE 通知
 """
 
-import logging
+from scraper.utils.logger import setup_logger
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
@@ -22,7 +22,8 @@ from .line_notification import LineNotification
 
 from owm_weather.utils import trans_temp_k2c
 
-logger = logging.getLogger(__name__)
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
 class NotificationBroker:
     """通知代理類，處理訂閱通知的發送邏輯"""

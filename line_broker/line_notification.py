@@ -1,8 +1,8 @@
 import requests
-import logging
+from scraper.utils.logger import setup_logger   
 
-
-logger = logging.getLogger(__name__)
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
 class LineNotification:
     """LINE 通知服務類別，處理訊息發送和格式化"""

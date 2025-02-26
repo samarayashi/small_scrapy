@@ -1,9 +1,9 @@
-import logging
+from scraper.utils.logger import setup_logger
 import pyowm
 from requests import Timeout
 
-
-logger = logging.getLogger(__name__)
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
 class WeatherStation():
     def __init__(self, owm_api_key=None):

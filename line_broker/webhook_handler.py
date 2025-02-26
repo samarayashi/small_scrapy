@@ -4,12 +4,13 @@
 from flask import Blueprint, request, abort
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import FollowEvent, MessageEvent, TextMessage
-import logging
+from scraper.utils.logger import setup_logger
 from line_broker.broker import NotificationBroker
 from line_broker.line_config import line_bot_api, handler
 from app.database.connection import db_manager
 
-logger = logging.getLogger(__name__)
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
 # 建立藍圖
 webhook_blueprint = Blueprint('webhook', __name__)
