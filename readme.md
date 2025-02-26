@@ -166,59 +166,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
    - 第一階段 (builder)：安裝編譯工具和開發依賴，編譯需要的二進制文件
    - 第二階段：只複製第一階段生成的結果，不包含編譯工具
    - 使用 `COPY --from=builder` 指令從第一階段複製編譯結果
+參考 [專案文件](./docker-compose.yml)
+參考[docker 文件](https://docs.docker.com/build/buildkit/multi-stage/)
 
-2. **完整實現示例**：
-   ```dockerfile
-   # 建構階段
-   FROM python:3.13-slim AS builder
-   
-   WORKDIR /build
-   
-   # 安裝編譯依賴
-   RUN apt-get update && apt-get install -y --no-install-recommends \
-       gcc \
-       libpq-dev \
-       && rm -rf /var/lib/apt/lists/*
-   
-   # 複製並安裝依賴
-   COPY requirements.txt .
-   RUN pip wheel --no-cache-dir --wheel-dir=/build/wheels -r requirements.txt
-   
-   # 運行階段
-   FROM python:3.13-slim
-   
-   WORKDIR /app
-   
-   # 安裝運行時依賴
-   RUN apt-get update && apt-get install -y --no-install-recommends \
-       libpq5 \
-       wget \
-       && rm -rf /var/lib/apt/lists/*
-   
-   # 從建構階段複製編譯好的依賴
-   COPY --from=builder /build/wheels /wheels
-   RUN pip install --no-cache-dir /wheels/*
-   
-   # 複製應用程式碼
-   COPY . .
-   
-   CMD ["python", "-m", "app.main"]
-   ```
-
-3. **優點**：
+2. **優點**：
    - **更小的映像體積**：最終映像不包含編譯工具和原始碼，減少 60-80% 大小
    - **更少的安全漏洞**：移除不必要的編譯工具減少攻擊面
    - **更快的部署**：較小的映像可以更快地分發和啟動
    - **構建快取優化**：依賴變化少時只重建必要的部分
    - **環境隔離**：開發依賴與運行環境完全分離
 
-4. **缺點**：
+3. **缺點**：
    - **撰寫複雜性**：編寫和維護多階段 Dockerfile 較為複雜
    - **調試難度**：問題排查可能需要檢查多個階段
    - **構建時間**：初次構建時間可能較長
    - **緩存管理**：需要精心設計以有效利用緩存
 
-5. **緩存管理的挑戰與最佳實踐**：
+4. **緩存管理的挑戰與最佳實踐**：
 
    多階段構建中的緩存管理比單階段構建更為複雜，需要特別注意以下幾點：
 
@@ -273,10 +237,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 - 使用 PostgreSQL 作為資料庫
 - SQLAlchemy 作為 ORM
-- 模型設計:
-  - **NewsCategory**: 新聞類別，主鍵為 category_key
-  - **NewsArticle**: 新聞文章，包含標題、URL、內容、發布時間等
-  - 含有唯一約束確保文章不重複
+- 資料實體關係:
+  ```
+  【資料實體關係圖】
+  
+  NewsCategory <------ NewsArticle -----> User
+     (類別)        |      (文章)          (用戶)
+                  |
+                  v
+                時間元數據
+  
+  • 每個新聞文章屬於一個新聞類別（多對一關係）
+  • 用戶可訂閱多個新聞類別（多對多關係，通過偏好設定實現）
+  • 新聞文章包含內容數據及 LLM 生成的元數據（摘要、情感等）
+  • 用戶資料儲存用戶識別信息及其通知偏好設定
+  ```
 
 資料庫連接管理：
 ```python
@@ -370,82 +345,56 @@ ngrok-1  | t=2025-02-25T18:32:14+0000 lvl=info msg="started tunnel" obj=tunnels 
 - 若需外部訪問，確保使用服務提供的域名而非 ngrok
 - 連接外部已託管的資料庫服務
 
-Render 部署配置示例：
-```yaml
-services:
-  - type: web
-    name: news-weather-bot
-    env: docker
-    dockerfilePath: ./Dockerfile
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: postgres
-          property: connectionString
-      - key: LINE_CHANNEL_ACCESS_TOKEN
-        sync: false
-      - key: LINE_CHANNEL_SECRET
-        sync: false
-      - key: OWM_API_KEY
-        sync: false
-```
+#### Render 部署步驟
 
-### 4.6 Docker 鏡像推送到 Docker Hub
+Render 提供三種部署選項：
 
-將映像推送到 Docker Hub 可方便部署和分享。流程如下：
+1. **使用現有映像** (Existing Image)
+   - 適合已將專案打包為 Docker 映像並上傳到 Docker Hub
+   - 優點：部署速度快、映像已在本地測試過、適合複雜依賴環境
+   - 缺點：需手動更新映像，缺乏自動化部署流程
 
-#### 1. 登入 Docker Hub
+2. **Git 倉庫整合** (Git Provider / Public Repository)
+   - 直接連接 GitHub/GitLab 等代碼倉庫
+   - 優點：自動 CI/CD 整合、可設置自動部署特定分支、可查看構建歷史
+   - 即使專案使用 Dockerfile 也建議選擇此選項，Render 會自動檢測並使用根目錄中的 Dockerfile
 
-```bash
-docker login
-# 輸入用戶名和密碼
-```
+3. **直接上傳源碼** (Source Code)
+   - 適合簡單應用或不使用 Git 的場景
+   - 缺乏版本控制，更新較為麻煩
 
-#### 2. 為本地映像打標籤
+**推薦部署方式**：Git 倉庫 + Dockerfile 組合
+- 在專案根目錄放置 Dockerfile
+- 選擇 "Git Provider" 部署選項連接 GitHub/GitLab
+- Render 會自動檢測 Dockerfile 並構建映像
+- 推送新代碼時自動重建和部署
+- 既利用容器化優勢，又保持自動部署的便利性
 
-```bash
-# 語法
-docker tag [本地映像名]:[標籤] [用戶名]/[倉庫名]:[標籤]
+**基本部署流程**：
 
-# 實例
-docker tag small_scrapy_app:latest youruser/news-weather-bot:latest
-```
+1. **準備工作**
+   - 確保代碼倉庫包含完整的 Dockerfile
+   - 在 Render 上創建 PostgreSQL 資料庫服務
 
-#### 3. 推送映像
+2. **創建 Web 服務**
+   - 選擇適合的部署選項（推薦 Git Provider）
+   - 配置服務名稱、區域和實例類型
 
-```bash
-docker push youruser/news-weather-bot:latest
-```
+3. **環境變數設定**
+   ```
+   DATABASE_URL=postgresql://postgres:password@db.internal:5432/news_db
+   LINE_CHANNEL_ACCESS_TOKEN=你的LINE頻道token
+   LINE_CHANNEL_SECRET=你的LINE頻道密鑰
+   OWM_API_KEY=你的OpenWeatherMap金鑰
+   ```
 
-#### 4. 從 docker-compose.yml 構建並推送
+4. **部署後配置**
+   - 將 Render 分配的域名更新到 LINE Developers Console 的 Webhook URL
 
-```bash
-# 構建映像
-docker-compose build
-
-# 推送映像
-docker-compose push
-```
-
-您需要在 docker-compose.yml 中設定正確的映像名稱：
-
-```yaml
-services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: youruser/news-weather-bot:latest  # 添加此行
-```
-
-#### 5. 在雲服務上使用映像
-
-```yaml
-services:
-  app:
-    image: youruser/news-weather-bot:latest
-    # 其他配置...
-```
+注意：Render 免費方案的資料庫實例有限制，目前僅有一個免費實例可用。您可以考慮：
+- 停用其他服務以釋放資料庫資源
+- 使用同一個資料庫服務但使用不同的資料庫名稱
+- 升級到付費方案以獲得更多資源
 
 ## 5. 資源與參考
 
@@ -460,21 +409,6 @@ services:
 ## 6. 開發與調試
 
 ### 6.1 本地開發
-
-不使用 Docker 的本地開發步驟：
-1. 安裝依賴：`pip install -r requirements.txt`
-2. 設定環境變數
-3. 啟動本地 PostgreSQL 資料庫
-4. 運行應用：`python -m app.main`
-5. 使用 ngrok 暴露本地服務：`ngrok http 5001`
-
-### 6.2 調試技巧
-
-使用 VS Code 進行容器內調試：
-- 建立 `.vscode/launch.json` 配置
-- 配置 Python 遠端調試器
-- 使用 Docker 擴展連接到運行中的容器
-- 設置斷點並啟動調試會話
 
 #### 使用 docker-compose 單獨啟動資料庫進行開發
 
@@ -519,6 +453,8 @@ services:
     python run.py webhook
     ```
 
+使用 ngrok 暴露本地服務：`ngrok http 5001`
+
 #### Docker 容器內部調試
 使用以下命令進入運行中的容器：
 ```bash
@@ -532,3 +468,17 @@ docker logs <容器ID或名稱>
 # 持續查看日誌
 docker logs -f <容器ID或名稱>
 ```
+
+todo:
+- 補上render部署
+  - 現在免費方案的資料庫已經被佔用
+  - 看是要合併到同一個資料庫，或是停掉其他服務後再部署
+- 更完整實作line event 的處理，讓user可以在line 上訂閱天氣或新聞
+  - 現在只有處理follow事件，把user id 註冊進資料庫
+  - 需要處理消息事件，根據user id 發送新聞或天氣通知
+  - 新聞來源中央社，需要增加其他新聞來源
+  - 串接LLM 進行新聞摘要生成
+- 機票爬蟲
+  - 爬取機票資訊
+  - 推播機票資訊
+
