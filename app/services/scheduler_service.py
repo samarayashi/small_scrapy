@@ -5,9 +5,12 @@ from app.database.connection import db_manager
 from scraper.spiders.cna.cna_spider import CnaSpider
 from line_broker.broker import NotificationBroker
 from app.config.settings import settings
-import logging
+from scraper.utils.logger import setup_logger
+# 使用自定義的logger設置
+logger = setup_logger(__name__)
 
-logger = logging.getLogger(__name__)
+# 全局實例，確保只有一個排程器
+scheduler = None
 
 class SchedulerService:
     def __init__(self, app=None):
@@ -17,6 +20,10 @@ class SchedulerService:
         
         if app is not None:
             self.init_app(app)
+        
+        # 設置全局實例
+        global scheduler
+        scheduler = self.scheduler
         
     def init_app(self, app):
         """延遲初始化模式"""
@@ -48,7 +55,31 @@ class SchedulerService:
         except Exception as e:
             logger.error(f"排程任務執行失敗: {str(e)}")
         finally:
-            session.remove()   
+            session.close()
+    
+    def _notify_weather(self):
+        """排程任務：執行天氣通知"""
+        logger.info("開始執行天氣通知任務")
+        session = self._get_db_session()
+        
+        try:
+            # 創建通知代理實例
+            broker = NotificationBroker(
+                db_session=session,
+                line_token=settings.line_channel_token,
+                owm_api_key=settings.owm_api_key
+            )
+            
+            # 使用代理發送天氣通知
+            broker.send_weather_notifications()
+            
+        except Exception as e:
+            logger.error(f"天氣通知任務執行失敗: {str(e)}")
+        finally:
+            # 正確的會話清理順序
+            session.close()  # 首先關閉特定會話
+            self.session_factory.remove()  # 然後清理線程本地存儲
+            logger.info("天氣通知任務完成")
         
     def start(self):
         """啟動排程器"""
@@ -59,16 +90,9 @@ class SchedulerService:
             max_instances=1
         )
         
-        # 初始化通知代理
-        broker = NotificationBroker(
-            db_session=self._get_db_session(),
-            line_token=settings.line_channel_token,
-            owm_api_key=settings.owm_api_key
-        )
-        
         # 每天早上八點執行天氣通知
         self.scheduler.add_job(
-            broker.send_weather_notifications,
+            self._notify_weather,
             trigger=CronTrigger(hour=8, minute=0),
             max_instances=1
         )
@@ -77,7 +101,7 @@ class SchedulerService:
         if self.app and settings.scheduler_debug:
             self.scheduler.add_job(
                 self._notify_weather,
-                trigger=CronTrigger(minute='*/1'),  # 每分鐘執行一次，用於測試
+                trigger=CronTrigger(second='*/10'),  # 每10秒執行一次，用於測試
                 max_instances=1,
                 id='weather_test_job'
             )

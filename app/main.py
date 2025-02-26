@@ -3,12 +3,15 @@ from app.database.connection import db_manager
 from app.services.scheduler_service import SchedulerService
 from line_broker.webhook_handler import webhook_blueprint
 from app.config.settings import settings
-import logging
+from scraper.utils.logger import setup_logger
 import signal
 import sys
 import os
 
-logger = logging.getLogger(__name__)
+logger = setup_logger(__name__)
+
+# 確保只創建一個排程器實例
+scheduler_service = None
 
 def create_app():
     """工廠模式創建Flask應用"""
@@ -40,17 +43,18 @@ def _init_components(app):
         raise
     
     # 2. 排程服務初始化
-    scheduler = SchedulerService(app)
-    scheduler.start()
+    global scheduler_service
+    scheduler_service = SchedulerService(app)
+    scheduler_service.start()
     
     # 3. 註冊藍圖，加上 /line 作為前綴
     app.register_blueprint(webhook_blueprint, url_prefix='/line')
     
     # 4. 添加關閉鉤子
     @app.teardown_appcontext
-    def shutdown_scheduler(exception=None):
-        scheduler.shutdown()
-        logger.info("排程服務已關閉")
+    def shutdown_session(exception=None):
+        db_manager.session_factory.remove()
+        logger.info("資料庫會話已移除")
 
 def register_shutdown_handlers():
     """註冊各種關閉信號的處理器"""
@@ -58,10 +62,10 @@ def register_shutdown_handlers():
     def shutdown_scheduler():
         """關閉排程器"""
         try:
-            from app.services.scheduler_service import scheduler
-            if scheduler and scheduler.running:
+            global scheduler_service
+            if scheduler_service:
                 logger.info("關閉排程器...")
-                scheduler.shutdown()
+                scheduler_service.shutdown()
                 return True
         except Exception as e:
             logger.error(f"關閉排程器時發生錯誤: {str(e)}")
@@ -70,7 +74,6 @@ def register_shutdown_handlers():
     def shutdown_db():
         """關閉資料庫連接"""
         try:
-            from app.database.connection import db_manager
             if db_manager and db_manager.session_factory:
                 logger.info("關閉資料庫連接...")
                 db_manager.session_factory.remove()
