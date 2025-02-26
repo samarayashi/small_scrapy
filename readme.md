@@ -1,7 +1,5 @@
 # 智慧新聞與天氣通知系統
 
-這份 README 不僅是專案說明，也是開發過程中的技術筆記，以記錄專案架構、開發細節和部署知識。
-
 ## 專案概述
 
 本專案整合了新聞爬蟲、天氣 API 和 LINE 通知功能，為用戶提供個性化的新聞和天氣資訊推送服務。
@@ -184,23 +182,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 4. **緩存管理的挑戰與最佳實踐**：
 
-   多階段構建中的緩存管理比單階段構建更為複雜，需要特別注意以下幾點：
-
    a. **緩存機制的挑戰**：
       - 每個構建階段都有獨立的緩存系統
       - 階段間的緩存依賴關係較為複雜
       - `COPY --from=builder` 指令不會自動感知源階段的變化
       - 不合理的指令順序容易導致緩存失效
 
-   b. **常見的緩存失效問題**：
-      ```dockerfile
-      # 不好的做法：先複製全部程式碼
-      COPY . .  
-      # 依賴安裝（每次程式碼變更都會重複執行這個耗時步驟）
-      RUN pip wheel --no-cache-dir --wheel-dir=/build/wheels -r requirements.txt
-      ```
-
-   c. **最佳實踐策略**：
+   b. **最佳實踐策略**：
       - **依賴分離**：先複製和安裝依賴文件，再複製應用程式碼
       ```dockerfile
       # 優先複製依賴文件
@@ -210,22 +198,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       # 再複製其他程式碼
       COPY . .
       ```
-      
-      - **使用 .dockerignore**：排除不必要的文件，如 `__pycache__/`、`.git/`、`.venv/` 等
-      
-      - **使用 BuildKit 緩存掛載**：
-      ```dockerfile
-      # 使用緩存掛載加速依賴安裝
-      RUN --mount=type=cache,target=/root/.cache/pip \
-          pip wheel --wheel-dir=/wheels -r requirements.txt
-      ```
-
+      - **使用 .dockerignore**：排除不必要的文件，如 `__pycache__/`、`.git/`、`.venv/` 
       - **明確命名階段並處理階段間依賴**：使用清晰的階段名稱，便於維護和理解
-
-   d. **實際影響**：
-      - 未優化的緩存策略可能導致每次程式碼變更都需重新安裝所有依賴
-      - 優化後可將構建時間從分鐘級縮短到秒級
-      - 在 CI/CD 流水線中尤為重要，可大幅提高開發效率
 
 多階段建構是容器化應用的最佳實踐，特別適合生產環境部署。理解並優化緩存管理可顯著提升開發效率和構建速度。
 
@@ -238,20 +212,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 - 使用 PostgreSQL 作為資料庫
 - SQLAlchemy 作為 ORM
 - 資料實體關係:
-  ```
-  【資料實體關係圖】
-  
-  NewsCategory <------ NewsArticle -----> User
-     (類別)        |      (文章)          (用戶)
-                  |
-                  v
-                時間元數據
-  
-  • 每個新聞文章屬於一個新聞類別（多對一關係）
-  • 用戶可訂閱多個新聞類別（多對多關係，通過偏好設定實現）
-  • 新聞文章包含內容數據及 LLM 生成的元數據（摘要、情感等）
-  • 用戶資料儲存用戶識別信息及其通知偏好設定
-  ```
 
 資料庫連接管理：
 ```python
@@ -272,25 +232,13 @@ Docker Compose 會創建一個默認網絡，所有服務容器都連接到這�
 # ngrok 服務連接到 app 服務
 command: http --log=stdout app:5001
 ```
-
 這裡的 `app` 是服務名，Docker 內部 DNS 會自動解析為 app 容器的 IP 地址。這種服務發現機制是 Docker 網絡的核心特性，使得容器間通信變得簡單。
 
-#### Docker 內部 DNS 解析原理
-1. Docker 在創建網絡時會啟動內嵌的 DNS 服務器
-2. 每個容器啟動時，Docker 會更新此 DNS 服務器
-3. 容器可以使用服務名稱而非 IP 進行通信（服務名稱解析為容器 IP）
-4. 即使容器重啟、IP 變更，服務名稱仍然有效
-
 ### 4.2 端口映射與內部通信
-
 Docker Compose 中的端口映射 `${APP_PORT:-5001}:5001`：
 - 左側 `${APP_PORT:-5001}`: 主機端口，可通過環境變數設定
 - 右側 `5001`: 容器內部端口，固定值
 
-重要概念：
-- 容器間通信使用的是內部端口，與主機映射無關
-- 環境變數僅影響主機映射端口，不影響容器間通信
-- 服務名稱解析僅在 Docker 內部網絡有效
 
 ### 4.3 健康檢查
 
@@ -304,13 +252,6 @@ healthcheck:
   retries: 3
   start_period: 5s
 ```
-
-參數解釋：
-- `test`: 執行的檢查命令
-- `interval`: 檢查間隔時間
-- `timeout`: 命令超時時間
-- `retries`: 失敗重試次數
-- `start_period`: 容器啟動後的寬限期
 
 服務依賴於健康檢查：
 ```yaml
@@ -339,15 +280,14 @@ ngrok-1  | t=2025-02-25T18:32:14+0000 lvl=info msg="started tunnel" obj=tunnels 
 ### 4.5 部署注意事項
 
 部署到 Render 等雲服務時：
-- 使用 Dockerfile 而非 docker-compose.yml
+- 可以使用 Dockerfile
 - 設置正確的環境變數
 - 確保資料庫連接字串設定正確
-- 若需外部訪問，確保使用服務提供的域名而非 ngrok
 - 連接外部已託管的資料庫服務
 
 #### Render 部署步驟
 
-Render 提供三種部署選項：
+Render 部署選項：
 
 1. **使用現有映像** (Existing Image)
    - 適合已將專案打包為 Docker 映像並上傳到 Docker Hub
@@ -358,10 +298,6 @@ Render 提供三種部署選項：
    - 直接連接 GitHub/GitLab 等代碼倉庫
    - 優點：自動 CI/CD 整合、可設置自動部署特定分支、可查看構建歷史
    - 即使專案使用 Dockerfile 也建議選擇此選項，Render 會自動檢測並使用根目錄中的 Dockerfile
-
-3. **直接上傳源碼** (Source Code)
-   - 適合簡單應用或不使用 Git 的場景
-   - 缺乏版本控制，更新較為麻煩
 
 **推薦部署方式**：Git 倉庫 + Dockerfile 組合
 - 在專案根目錄放置 Dockerfile
@@ -391,7 +327,7 @@ Render 提供三種部署選項：
 4. **部署後配置**
    - 將 Render 分配的域名更新到 LINE Developers Console 的 Webhook URL
 
-注意：Render 免費方案的資料庫實例有限制，目前僅有一個免費實例可用。您可以考慮：
+注意：Render 免費方案的資料庫實例有限制，目前僅有一個免費實例可用。考慮：
 - 停用其他服務以釋放資料庫資源
 - 使用同一個資料庫服務但使用不同的資料庫名稱
 - 升級到付費方案以獲得更多資源
@@ -424,33 +360,12 @@ Render 提供三種部署選項：
    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/news_db
    ```
 3. 使用 run.py 進行本地開發和調試：
-
     ```bash
-    python run.py menu
-    ```
-
-    測試新聞爬蟲：
-
-    ```bash
-    python run.py news
-    ```
-
-    執行 ETL 流程：
-
-    ```bash
-    python run.py etl
-    ```
-
-    發送通知：
-
-    ```bash
-    python run.py notify
-    ```
-
-    啟動 Webhook 服務：
-
-    ```bash
-    python run.py webhook
+    python run.py menu      # 進入選單
+    python run.py news      # 測試新聞爬蟲
+    python run.py etl       # 執行 ETL 流程
+    python run.py notify    # 發送通知
+    python run.py webhook   # 啟動 Webhook 服務
     ```
 
 使用 ngrok 暴露本地服務：`ngrok http 5001`
@@ -469,7 +384,7 @@ docker logs <容器ID或名稱>
 docker logs -f <容器ID或名稱>
 ```
 
-todo:
+####todo:
 - 補上render部署
   - 現在免費方案的資料庫已經被佔用
   - 看是要合併到同一個資料庫，或是停掉其他服務後再部署
