@@ -267,55 +267,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 ### 3.2 Docker Compose 服務配置
 
-```yaml
-services:
-  # 資料庫服務
-  db:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # 應用服務
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN}
-      - LINE_CHANNEL_SECRET=${LINE_CHANNEL_SECRET}
-      - OWM_API_KEY=${OWM_API_KEY}
-    ports:
-      - "${APP_PORT:-5001}:5001"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:5001/line/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-
-  # ngrok 服務
-  ngrok:
-    image: ngrok/ngrok:latest
-    environment:
-      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
-    command: http --log=stdout app:5001
-    ports:
-      - "4040:4040"  # ngrok 管理介面
-    depends_on:
-      app:
-        condition: service_healthy
-```
+參考 [Docker Compose 文件](./docker-compose.yml)
 
 ### 3.3 資料庫配置
 
@@ -537,68 +489,35 @@ services:
    ```
    DATABASE_URL=postgresql://postgres:postgres@localhost:5432/news_db
    ```
-
 3. 使用 run.py 進行本地開發和調試：
-   ```bash
-   python run.py
-   ```
 
-run.py 中通常包含開發模式的設定，可以根據需要啟動特定功能模組：
+    ```bash
+    python run.py menu
+    ```
 
-```python
-# run.py 範例
-import argparse
-import logging
+    測試新聞爬蟲：
 
-from app.main import app as flask_app
-from scraper.spiders.cna_spider import CnaSpider
-from line_broker.send_notifications import send_news_notifications
+    ```bash
+    python run.py news
+    ```
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+    執行 ETL 流程：
 
-def run_scraper():
-    """執行爬蟲任務"""
-    logger.info("開始執行爬蟲")
-    spider = CnaSpider()
-    articles = spider.crawl()
-    logger.info(f"爬取了 {len(articles)} 篇文章")
-    return articles
+    ```bash
+    python run.py etl
+    ```
 
-def run_notification():
-    """執行推送通知任務"""
-    logger.info("開始發送通知")
-    send_news_notifications()
-    logger.info("通知發送完成")
+    發送通知：
 
-def run_api():
-    """啟動 API 服務"""
-    logger.info("啟動 API 服務")
-    flask_app.run(host="0.0.0.0", port=5001, debug=True)
+    ```bash
+    python run.py notify
+    ```
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="開發模式啟動工具")
-    parser.add_argument("--scraper", action="store_true", help="執行爬蟲")
-    parser.add_argument("--notify", action="store_true", help="發送通知")
-    parser.add_argument("--api", action="store_true", help="啟動 API 服務")
-    
-    args = parser.parse_args()
-    
-    if args.scraper:
-        run_scraper()
-    elif args.notify:
-        run_notification()
-    elif args.api:
-        run_api()
-    else:
-        print("請指定要執行的模組: --scraper, --notify 或 --api")
-```
+    啟動 Webhook 服務：
 
-這種混合開發方式的好處：
-- 簡化開發流程，不需要每次都構建映像
-- 更快的編碼-測試迭代循環
-- 方便使用 IDE 進行調試和斷點設置
-- 可以獨立測試系統的各個組件
+    ```bash
+    python run.py webhook
+    ```
 
 #### Docker 容器內部調試
 使用以下命令進入運行中的容器：
