@@ -90,6 +90,14 @@ docker-compose up app
 # 僅啟動 ngrok 通道
 docker-compose up ngrok
 ```
+**卸載服務**：
+```bash
+# 卸載服務  
+docker-compose down
+
+# 卸載服務並刪除卷，清掉資料庫內容
+docker-compose down --volumes
+```
 
 ### LINE Webhook 設定
 
